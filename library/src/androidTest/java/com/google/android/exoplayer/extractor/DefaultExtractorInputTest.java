@@ -34,6 +34,7 @@ public class DefaultExtractorInputTest extends TestCase {
 
   private static final String TEST_URI = "http://www.google.com";
   private static final byte[] TEST_DATA = new byte[] {0, 1, 2, 3, 4, 5, 6, 7, 8};
+  private static final int LARGE_TEST_DATA_LENGTH = 8192;
 
   public void testInitialPosition() throws IOException {
     FakeDataSource testDataSource = buildDataSource();
@@ -182,6 +183,16 @@ public class DefaultExtractorInputTest extends TestCase {
     assertEquals(-1, expectedEndOfInput);
   }
 
+  public void testLargeSkip() throws IOException, InterruptedException {
+    FakeDataSource testDataSource = buildLargeDataSource();
+    DefaultExtractorInput input = new DefaultExtractorInput(testDataSource, 0, C.LENGTH_UNBOUNDED);
+    // Check that skipping the entire data source succeeds.
+    int bytesToSkip = LARGE_TEST_DATA_LENGTH;
+    while (bytesToSkip > 0) {
+      bytesToSkip -= input.skip(bytesToSkip);
+    }
+  }
+
   public void testSkipFullyOnce() throws IOException, InterruptedException {
     // Skip TEST_DATA.
     DefaultExtractorInput input = createDefaultExtractorInput();
@@ -286,15 +297,88 @@ public class DefaultExtractorInputTest extends TestCase {
     // Check that we read the whole of TEST_DATA.
     assertTrue(Arrays.equals(TEST_DATA, target));
     assertEquals(0, input.getPosition());
+    assertEquals(TEST_DATA.length, input.getPeekPosition());
 
     // Check that we can read again from the buffer
     byte[] target2 = new byte[TEST_DATA.length];
     input.readFully(target2, 0, TEST_DATA.length);
     assertTrue(Arrays.equals(TEST_DATA, target2));
+    assertEquals(TEST_DATA.length, input.getPosition());
+    assertEquals(TEST_DATA.length, input.getPeekPosition());
 
     // Check that we fail with EOFException if we peek again
     try {
       input.peekFully(target, 0, 1);
+      fail();
+    } catch (EOFException e) {
+      // Expected.
+    }
+  }
+
+  public void testResetPeekPosition() throws IOException, InterruptedException {
+    DefaultExtractorInput input = createDefaultExtractorInput();
+    byte[] target = new byte[TEST_DATA.length];
+    input.peekFully(target, 0, TEST_DATA.length);
+
+    // Check that we read the whole of TEST_DATA.
+    assertTrue(Arrays.equals(TEST_DATA, target));
+    assertEquals(0, input.getPosition());
+
+    // Check that we can peek again after resetting.
+    input.resetPeekPosition();
+    byte[] target2 = new byte[TEST_DATA.length];
+    input.peekFully(target2, 0, TEST_DATA.length);
+    assertTrue(Arrays.equals(TEST_DATA, target2));
+
+    // Check that we fail with EOFException if we peek past the end of the input.
+    try {
+      input.peekFully(target, 0, 1);
+      fail();
+    } catch (EOFException e) {
+      // Expected.
+    }
+  }
+
+  public void testPeekFullyAtEndOfStreamWithAllowEndOfInputSucceeds()
+      throws IOException, InterruptedException {
+    DefaultExtractorInput input = createDefaultExtractorInput();
+    byte[] target = new byte[TEST_DATA.length];
+
+    // Check peeking up to the end of input succeeds.
+    assertTrue(input.peekFully(target, 0, TEST_DATA.length, true));
+
+    // Check peeking at the end of input with allowEndOfInput signals the end of input.
+    assertFalse(input.peekFully(target, 0, 1, true));
+  }
+
+  public void testPeekFullyAcrossEndOfInputWithAllowEndOfInputFails()
+      throws IOException, InterruptedException {
+    DefaultExtractorInput input = createDefaultExtractorInput();
+    byte[] target = new byte[TEST_DATA.length];
+
+    // Check peeking before the end of input with allowEndOfInput succeeds.
+    assertTrue(input.peekFully(target, 0, TEST_DATA.length - 1, true));
+
+    // Check peeking across the end of input with allowEndOfInput throws.
+    try {
+      input.peekFully(target, 0, 2, true);
+      fail();
+    } catch (EOFException e) {
+      // Expected.
+    }
+  }
+
+  public void testResetAndPeekFullyPastEndOfStreamWithAllowEndOfInputFails()
+      throws IOException, InterruptedException {
+    DefaultExtractorInput input = createDefaultExtractorInput();
+    byte[] target = new byte[TEST_DATA.length];
+
+    // Check peeking up to the end of input succeeds.
+    assertTrue(input.peekFully(target, 0, TEST_DATA.length, true));
+    input.resetPeekPosition();
+    try {
+      // Check peeking one more byte throws.
+      input.peekFully(target, 0, TEST_DATA.length + 1, true);
       fail();
     } catch (EOFException e) {
       // Expected.
@@ -316,6 +400,14 @@ public class DefaultExtractorInputTest extends TestCase {
     builder.appendReadData(Arrays.copyOfRange(TEST_DATA, 0, 6));
     builder.appendReadError(new IOException());
     builder.appendReadData(Arrays.copyOfRange(TEST_DATA, 6, 9));
+    FakeDataSource testDataSource = builder.build();
+    testDataSource.open(new DataSpec(Uri.parse(TEST_URI)));
+    return testDataSource;
+  }
+
+  private static FakeDataSource buildLargeDataSource() throws IOException {
+    FakeDataSource.Builder builder = new FakeDataSource.Builder();
+    builder.appendReadData(new byte[LARGE_TEST_DATA_LENGTH]);
     FakeDataSource testDataSource = builder.build();
     testDataSource.open(new DataSpec(Uri.parse(TEST_URI)));
     return testDataSource;

@@ -87,7 +87,8 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
 
   }
 
-  // TODO: Use MediaFormat constants if these get exposed through the API. See [Internal: b/14127601].
+  // TODO: Use MediaFormat constants if these get exposed through the API. See
+  // [Internal: b/14127601].
   private static final String KEY_CROP_LEFT = "crop-left";
   private static final String KEY_CROP_RIGHT = "crop-right";
   private static final String KEY_CROP_BOTTOM = "crop-bottom";
@@ -220,15 +221,13 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
       throws DecoderQueryException {
     String mimeType = mediaFormat.mimeType;
     return MimeTypes.isVideo(mimeType) && (MimeTypes.VIDEO_UNKNOWN.equals(mimeType)
-        || mediaCodecSelector.getDecoderInfo(mediaFormat, false) != null);
+        || mediaCodecSelector.getDecoderInfo(mimeType, false) != null);
   }
 
   @Override
   protected void onEnabled(int track, long positionUs, boolean joining)
       throws ExoPlaybackException {
     super.onEnabled(track, positionUs, joining);
-    renderedFirstFrame = false;
-    consecutiveDroppedFrameCount = 0;
     if (joining && allowedJoiningTimeUs > 0) {
       joiningDeadlineUs = SystemClock.elapsedRealtime() * 1000L + allowedJoiningTimeUs;
     }
@@ -236,8 +235,8 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
   }
 
   @Override
-  protected void seekTo(long positionUs) throws ExoPlaybackException {
-    super.seekTo(positionUs);
+  protected void onDiscontinuity(long positionUs) throws ExoPlaybackException {
+    super.onDiscontinuity(positionUs);
     renderedFirstFrame = false;
     consecutiveDroppedFrameCount = 0;
     joiningDeadlineUs = -1;
@@ -327,7 +326,6 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
       android.media.MediaFormat format, MediaCrypto crypto) {
     maybeSetMaxInputSize(format, codecIsAdaptive);
     codec.configure(format, surface, crypto, 0);
-    codec.setVideoScalingMode(videoScalingMode);
   }
 
   @Override
@@ -347,7 +345,7 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
   }
 
   @Override
-  protected void onOutputFormatChanged(android.media.MediaFormat outputFormat) {
+  protected void onOutputFormatChanged(MediaCodec codec, android.media.MediaFormat outputFormat) {
     boolean hasCrop = outputFormat.containsKey(KEY_CROP_RIGHT)
         && outputFormat.containsKey(KEY_CROP_LEFT) && outputFormat.containsKey(KEY_CROP_BOTTOM)
         && outputFormat.containsKey(KEY_CROP_TOP);
@@ -372,6 +370,8 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
       // On API level 20 and below the decoder does not apply the rotation.
       currentUnappliedRotationDegrees = pendingRotationDegrees;
     }
+    // Must be applied each time the output format changes.
+    codec.setVideoScalingMode(videoScalingMode);
   }
 
   @Override
@@ -498,17 +498,8 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
 
   @SuppressLint("InlinedApi")
   private void maybeSetMaxInputSize(android.media.MediaFormat format, boolean codecIsAdaptive) {
-    if (!MimeTypes.VIDEO_H264.equals(format.getString(android.media.MediaFormat.KEY_MIME))) {
-      // Only set a max input size for H264 for now.
-      return;
-    }
     if (format.containsKey(android.media.MediaFormat.KEY_MAX_INPUT_SIZE)) {
       // Already set. The source of the format may know better, so do nothing.
-      return;
-    }
-    if ("BRAVIA 4K 2015".equals(Util.MODEL)) {
-      // The Sony BRAVIA 4k TV has input buffers that are too small for the calculated 4k video
-      // maximum input size, so use the default value.
       return;
     }
     int maxHeight = format.getInteger(android.media.MediaFormat.KEY_HEIGHT);
@@ -519,8 +510,40 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
     if (codecIsAdaptive && format.containsKey(android.media.MediaFormat.KEY_MAX_WIDTH)) {
       maxWidth = Math.max(maxHeight, format.getInteger(android.media.MediaFormat.KEY_MAX_WIDTH));
     }
-    // H264 requires compression ratio of at least 2, and uses macroblocks.
-    int maxInputSize = ((maxWidth + 15) / 16) * ((maxHeight + 15) / 16) * 192;
+    int maxPixels;
+    int minCompressionRatio;
+    switch (format.getString(android.media.MediaFormat.KEY_MIME)) {
+      case MimeTypes.VIDEO_H263:
+      case MimeTypes.VIDEO_MP4V:
+        maxPixels = maxWidth * maxHeight;
+        minCompressionRatio = 2;
+        break;
+      case MimeTypes.VIDEO_H264:
+        if ("BRAVIA 4K 2015".equals(Util.MODEL)) {
+          // The Sony BRAVIA 4k TV has input buffers that are too small for the calculated 4k video
+          // maximum input size, so use the default value.
+          return;
+        }
+        // Round up width/height to an integer number of macroblocks.
+        maxPixels = ((maxWidth + 15) / 16) * ((maxHeight + 15) / 16) * 16 * 16;
+        minCompressionRatio = 2;
+        break;
+      case MimeTypes.VIDEO_VP8:
+        // VPX does not specify a ratio so use the values from the platform's SoftVPX.cpp.
+        maxPixels = maxWidth * maxHeight;
+        minCompressionRatio = 2;
+        break;
+      case MimeTypes.VIDEO_H265:
+      case MimeTypes.VIDEO_VP9:
+        maxPixels = maxWidth * maxHeight;
+        minCompressionRatio = 4;
+        break;
+      default:
+        // Leave the default max input size.
+        return;
+    }
+    // Estimate the maximum input size assuming three channel 4:2:0 subsampled input frames.
+    int maxInputSize = (maxPixels * 3) / (2 * minCompressionRatio);
     format.setInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE, maxInputSize);
   }
 
