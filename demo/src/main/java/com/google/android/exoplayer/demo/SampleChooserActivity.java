@@ -98,36 +98,36 @@ public class SampleChooserActivity extends Activity {
     setContentView(R.layout.sample_chooser_activity);
     final List<SampleGroup> sampleGroups = new ArrayList<>();
     SampleGroup group = new SampleGroup("YouTube DASH");
-    group.addAll(Samples.YOUTUBE_DASH_MP4);
-    group.addAll(Samples.YOUTUBE_DASH_WEBM);
-    sampleGroups.add(group);
-    group = new SampleGroup("Widevine DASH Policy Tests (GTS)");
-    group.addAll(Samples.WIDEVINE_GTS);
-    sampleGroups.add(group);
-    group = new SampleGroup("Widevine HDCP Capabilities Tests");
-    group.addAll(Samples.WIDEVINE_HDCP);
-    sampleGroups.add(group);
+//    group.addAll(Samples.YOUTUBE_DASH_MP4);
+//    group.addAll(Samples.YOUTUBE_DASH_WEBM);
+//    sampleGroups.add(group);
+//    group = new SampleGroup("Widevine DASH Policy Tests (GTS)");
+//    group.addAll(Samples.WIDEVINE_GTS);
+//    sampleGroups.add(group);
+//    group = new SampleGroup("Widevine HDCP Capabilities Tests");
+//    group.addAll(Samples.WIDEVINE_HDCP);
+//    sampleGroups.add(group);
     group = new SampleGroup("Widevine DASH: MP4,H264");
     group.addAll(Samples.WIDEVINE_H264_MP4_CLEAR);
     group.addAll(Samples.WIDEVINE_H264_MP4_SECURE);
     sampleGroups.add(group);
-    group = new SampleGroup("Widevine DASH: WebM,VP9");
-    group.addAll(Samples.WIDEVINE_VP9_WEBM_CLEAR);
-    group.addAll(Samples.WIDEVINE_VP9_WEBM_SECURE);
-    sampleGroups.add(group);
-    group = new SampleGroup("Widevine DASH: MP4,H265");
-    group.addAll(Samples.WIDEVINE_H265_MP4_CLEAR);
-    group.addAll(Samples.WIDEVINE_H265_MP4_SECURE);
-    sampleGroups.add(group);
-    group = new SampleGroup("SmoothStreaming");
-    group.addAll(Samples.SMOOTHSTREAMING);
-    sampleGroups.add(group);
-    group = new SampleGroup("HLS");
-    group.addAll(Samples.HLS);
-    sampleGroups.add(group);
-    group = new SampleGroup("Misc");
-    group.addAll(Samples.MISC);
-    sampleGroups.add(group);
+//    group = new SampleGroup("Widevine DASH: WebM,VP9");
+//    group.addAll(Samples.WIDEVINE_VP9_WEBM_CLEAR);
+//    group.addAll(Samples.WIDEVINE_VP9_WEBM_SECURE);
+//    sampleGroups.add(group);
+//    group = new SampleGroup("Widevine DASH: MP4,H265");
+//    group.addAll(Samples.WIDEVINE_H265_MP4_CLEAR);
+//    group.addAll(Samples.WIDEVINE_H265_MP4_SECURE);
+//    sampleGroups.add(group);
+//    group = new SampleGroup("SmoothStreaming");
+//    group.addAll(Samples.SMOOTHSTREAMING);
+//    sampleGroups.add(group);
+//    group = new SampleGroup("HLS");
+//    group.addAll(Samples.HLS);
+//    sampleGroups.add(group);
+//    group = new SampleGroup("Misc");
+//    group.addAll(Samples.MISC);
+//    sampleGroups.add(group);
     ExpandableListView sampleList = (ExpandableListView) findViewById(R.id.sample_list);
     sampleList.setAdapter(new SampleAdapter(this, sampleGroups));
     sampleList.setOnChildClickListener(new OnChildClickListener() {
@@ -138,6 +138,7 @@ public class SampleChooserActivity extends Activity {
         return true;
       }
     });
+    sampleList.expandGroup(0);
 
     final FragmentTransaction transaction = getFragmentManager().beginTransaction();
     transaction.replace(R.id.player_container, new PlayerFragment());
@@ -329,7 +330,7 @@ public class SampleChooserActivity extends Activity {
       playerStateTextView = (TextView) inflateView.findViewById(R.id.player_state_view);
       subtitleLayout = (SubtitleLayout) inflateView.findViewById(R.id.subtitles);
 
-      mediaController = new KeyCompatibleMediaController(this.getContext());
+      mediaController = new KeyCompatibleMediaController(getActivity());
       mediaController.setAnchorView(root);
       retryButton = (Button) inflateView.findViewById(R.id.retry_button);
       retryButton.setOnClickListener(this);
@@ -370,6 +371,10 @@ public class SampleChooserActivity extends Activity {
         }
       });
       return inflateView;
+    }
+
+    public Context getContext() {
+      return getActivity();
     }
 
     @Override
