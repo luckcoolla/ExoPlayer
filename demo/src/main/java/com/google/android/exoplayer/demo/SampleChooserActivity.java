@@ -517,6 +517,10 @@ public class SampleChooserActivity extends Activity {
         playerNeedsPrepare = false;
         updateButtonVisibilities();
       }
+      videoContainer.removeView(surfaceView);
+      surfaceView = new SurfaceView(SampleChooserActivity.this);
+      videoContainer.addView(surfaceView, 0);
+      surfaceView.getHolder().addCallback(this);
       player.setSurface(surfaceView.getHolder().getSurface());
       player.setPlayWhenReady(playWhenReady);
     }
@@ -809,7 +813,7 @@ public class SampleChooserActivity extends Activity {
       }
     }
 
-    // SurfaceHolder.Callback implementation
+    // SurfaceHolder.Callback implementation TODO
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
